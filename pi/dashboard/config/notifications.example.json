@@ -1,0 +1,17 @@
+{
+  "enabled": false,
+  "endpoint": "http://127.0.0.1:2586",
+  "topic": "replace-with-a-random-private-topic",
+  "dashboardUrl": "https://hearth.example.invalid/",
+  "networkUrl": "https://hearth.example.invalid/#network",
+  "pollMs": 30000,
+  "networkPollMs": 30000,
+  "networkJoinScans": 2,
+  "networkOnlineGraceMs": 600000,
+  "networkAwayMs": 2700000,
+  "networkIdentityWindowMs": 2700000,
+  "networkUnknownRetentionMs": 604800000,
+  "bluetoothPollMs": 300000,
+  "bluetoothScanSeconds": 8,
+  "reminderMs": 1800000
+}

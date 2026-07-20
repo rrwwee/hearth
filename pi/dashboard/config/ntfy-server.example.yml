@@ -1,0 +1,13 @@
+base-url: "https://notify.example.invalid"
+listen-http: ":2586"
+behind-proxy: true
+web-root: disable
+cache-file: "/var/cache/ntfy/cache.db"
+cache-duration: "72h"
+manager-interval: "1h"
+attachment-cache-dir: "/var/cache/ntfy/attachments"
+attachment-expiry-duration: "72h"
+attachment-total-size-limit: "250M"
+attachment-file-size-limit: "15M"
+auth-default-access: "read-write"
+upstream-base-url: "https://ntfy.sh"

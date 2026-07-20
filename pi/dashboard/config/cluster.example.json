@@ -1,0 +1,8 @@
+{
+  "scheduler": "slurm",
+  "sshHost": "compute",
+  "jumpHost": "cluster-jump",
+  "user": "researcher",
+  "friends": ["collaborator-a", "collaborator-b"],
+  "jobLimit": 1000
+}

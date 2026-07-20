@@ -1,0 +1,6 @@
+host = vpn.example.invalid
+port = 443
+username = researcher
+
+# Never store a VPN password in this file. Hearth accepts it over a protected,
+# same-origin request and passes it to the helper through standard input.

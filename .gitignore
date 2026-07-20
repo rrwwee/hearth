@@ -1,0 +1,22 @@
+node_modules/
+.DS_Store
+.env
+.env.*
+!.env.example
+*.log
+state/
+.demo-state/
+__pycache__/
+*.pyc
+coverage/
+
+# Real deployments keep identifying configuration outside version control.
+config/*
+!config/*.example.json
+pi/dashboard/config/*
+!pi/dashboard/config/*.example
+!pi/dashboard/config/*.example.*
+
+# Optional private visual used by the household deployment.
+public/background.mp4
+public/background.local.*

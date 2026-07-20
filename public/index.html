@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hearth</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="stage" aria-labelledby="title">
+        <h1 class="sr-only" id="title">Hearth</h1>
+        <video class="background-video" aria-hidden="true" autoplay muted loop playsinline>
+          <source src="/background.mp4" type="video/mp4" />
+        </video>
+        <div class="background-shade" aria-hidden="true"></div>
+        <div class="ambient-glow" aria-hidden="true"></div>
+
+        <section class="system-panel terminal-block" aria-label="Pi system">
+          <div class="panel-title">
+            <h2>hearth</h2>
+            <span class="mode-badge" id="modeBadge" hidden>demo data</span>
+          </div>
+          <div class="metric-grid">
+            <span>temp</span><strong id="temperature">--.-c</strong>
+            <span>volt</span><strong id="voltage">--.--v</strong>
+            <span>uptime</span><strong id="uptime">--</strong>
+            <span>load</span><strong id="load">--</strong>
+          </div>
+          <div class="system-capacity" id="systemCapacity"></div>
+          <ol class="core-list" id="coreList"></ol>
+          <div class="process-table">
+            <div class="process-head">
+              <span>proc</span><span aria-hidden="true"></span><span>cpu</span><span>mem</span>
+            </div>
+            <ol class="process-list" id="processList"></ol>
+          </div>
+          <div class="network-table" id="network" aria-label="Network devices">
+            <div class="network-head">
+              <span>network</span><span aria-hidden="true"></span><span>time</span>
+            </div>
+            <ol class="device-list" id="deviceList"></ol>
+          </div>
+        </section>
+
+        <section class="cluster terminal-block" id="cluster" aria-label="MLP cluster">
+          <h2>cluster</h2>
+          <form class="auth-form" id="authForm" autocomplete="off" hidden>
+            <span id="authLabel">cluster</span>
+            <select id="authTarget" aria-label="Password target" hidden>
+              <option value="cluster">cluster</option>
+              <option value="vpn">vpn</option>
+            </select>
+            <input id="authPassword" type="password" inputmode="text" autocomplete="current-password" placeholder="password" aria-label="Password" />
+            <button id="authButton" type="submit">send</button>
+            <span id="authStatus" aria-live="polite"></span>
+          </form>
+          <div id="clusterStatus"></div>
+        </section>
+
+        <div class="status-strip terminal-block" id="statusStrip" aria-live="polite">
+          <span class="status-light" id="statusLight"></span>
+          <span id="statusText">Warming up</span>
+          <button id="refreshButton" type="button">refresh</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

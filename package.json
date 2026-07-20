@@ -1,0 +1,21 @@
+{
+  "name": "hearth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "demo": "node server.js",
+    "start:live": "node --env-file=.env server.js",
+    "validate:live": "HEARTH_VALIDATE_ONLY=1 node server.js",
+    "test": "node --test",
+    "audit:public": "node scripts/audit-public-tree.mjs",
+    "audit:history": "node scripts/audit-git-history.mjs",
+    "check:syntax": "node --check server.js && node --check public/app.js && node --check demo/fixtures.js && python3 -c \"import ast, pathlib; ast.parse(pathlib.Path('pi/dashboard/dashboard_agent.py').read_text())\" && bash -n pi/dashboard/*.sh pi/dashboard/lib/*.sh",
+    "check": "npm run check:syntax && npm test && npm run audit:public",
+    "check:release": "npm run check && npm run audit:history"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
