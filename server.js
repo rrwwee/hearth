@@ -2,12 +2,22 @@ import { execFile, spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { Socket } from "node:net";
 import { uptime } from "node:os";
-import { access, appendFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { access, appendFile, mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { demoBluetooth, demoCluster, demoNetwork, demoSnapshot } from "./demo/fixtures.js";
+import {
+  indexOwnJobs,
+  indexOwnTerminalJobs,
+  jobStartCandidates,
+  jobTerminalCandidates,
+  passwordNeedForCluster,
+  pruneKnownTerminalJobs,
+  terminalNotification,
+} from "./lib/notification-policy.js";
+import { createExclusiveRunner, sendNtfy } from "./lib/notification-delivery.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const publicDir = join(__dirname, "public");
@@ -386,12 +396,20 @@ async function validateLiveConfiguration() {
     } catch {
       throw new Error("The notification endpoint is not a valid URL.");
     }
+    if (notifications.pollMs !== undefined && (!Number.isFinite(Number(notifications.pollMs)) || Number(notifications.pollMs) < 1000)) {
+      throw new Error("Notification pollMs must be a number of at least 1000 milliseconds.");
+    }
+    if (notifications.deliveryTimeoutMs !== undefined
+        && (!Number.isFinite(Number(notifications.deliveryTimeoutMs)) || Number(notifications.deliveryTimeoutMs) < 1000)) {
+      throw new Error("Notification deliveryTimeoutMs must be a number of at least 1000 milliseconds.");
+    }
   }
 
   const cluster = await readRequiredJson(join(configDir, "cluster.json"), "Cluster");
   if (typeof cluster.scheduler !== "string" || typeof cluster.sshHost !== "string"
+      || typeof cluster.jumpHost !== "string" || typeof cluster.user !== "string"
       || !Array.isArray(cluster.friends) || !Number.isFinite(Number(cluster.jobLimit))) {
-    throw new Error("Cluster configuration has an invalid scheduler, SSH host, friends list, or job limit.");
+    throw new Error("Cluster configuration has an invalid scheduler, SSH host, jump host, user, friends list, or job limit.");
   }
 
   let ntfy;
@@ -409,7 +427,14 @@ async function validateLiveConfiguration() {
 
 async function writeJsonFile(path, value) {
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+    await rename(temporaryPath, path);
+  } catch (error) {
+    await unlink(temporaryPath).catch(() => {});
+    throw error;
+  }
 }
 
 function deviceNameKeys(body) {
@@ -463,7 +488,15 @@ async function notificationConfig() {
     bluetoothPollMs: Number(config.bluetoothPollMs) || 5 * 60 * 1000,
     bluetoothScanSeconds: Number(config.bluetoothScanSeconds) || 8,
     reminderMs: Number(config.reminderMs) || 30 * 60 * 1000,
+    deliveryTimeoutMs: Number(config.deliveryTimeoutMs) || 10000,
+    cache: config.cache,
   };
+}
+
+function notificationSequenceId(kind, key) {
+  const prefix = kind.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").slice(0, 32);
+  const digest = createHash("sha256").update(`${kind}:${key}`).digest("hex").slice(0, 24);
+  return `hearth-${prefix}-${digest}`;
 }
 
 async function publishNotification(kind, title, message, options = {}) {
@@ -473,21 +506,14 @@ async function publishNotification(kind, title, message, options = {}) {
     return;
   }
 
-  const endpoint = `${config.endpoint.replace(/\/$/, "")}/${encodeURIComponent(config.topic)}`;
-  const headers = {
-    "title": title,
-    "priority": options.priority || "default",
-    "tags": options.tags || "fire",
-    "click": options.click || config.dashboardUrl,
-  };
-  if (config.cache === false) headers.cache = "no";
-  if (config.token) headers.authorization = `Bearer ${config.token}`;
-
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers,
-      body: message,
+    const response = await sendNtfy(config, {
+      title,
+      message,
+      priority: options.priority,
+      tags: options.tags,
+      click: options.click,
+      sequenceId: options.sequenceId,
     });
     await logEvent("notify.sent", {
       kind,
@@ -495,40 +521,11 @@ async function publishNotification(kind, title, message, options = {}) {
       status: response.status,
       ok: response.ok,
     });
+    return true;
   } catch (error) {
     await logEvent("notify.error", { kind, title, error: safeText(error.message) });
+    throw error;
   }
-}
-
-function passwordNeedForCluster(cluster) {
-  if (!cluster || cluster.reachable) return null;
-  const note = `${cluster.note || ""}`.toLowerCase();
-  if (
-    note.includes("network is unreachable") ||
-    note.includes("no route to host") ||
-    note.includes("connection timed out") ||
-    note.includes("vpn tunnel started")
-  ) {
-    return "vpn";
-  }
-  return "cluster";
-}
-
-function indexOwnJobs(cluster) {
-  const user = cluster?.user;
-  const jobs = {};
-  if (!user) return jobs;
-  for (const job of cluster.jobs || []) {
-    if (job.user !== user) continue;
-    jobs[job.id] = {
-      id: job.id,
-      name: job.name,
-      state: job.state,
-      time: job.time,
-      submittedAt: job.submittedAt,
-    };
-  }
-  return jobs;
 }
 
 function jobLabel(job) {
@@ -950,13 +947,12 @@ async function updateNetworkNotifications(config, state, now) {
   await publishNetworkHourlySummary(config, state, now);
 }
 
-async function runNotificationMonitor() {
-  const config = await notificationConfig();
-  if (!config.enabled) return;
-
-  const state = await readJsonFile(notificationStatePath, {
+function newNotificationState() {
+  return {
     initialized: false,
     jobs: {},
+    knownTerminalJobs: {},
+    jobNotificationVersion: 0,
     networkDevices: {},
     networkEvents: [],
     networkCheckedAt: 0,
@@ -964,72 +960,142 @@ async function runNotificationMonitor() {
     bluetoothSnapshot: null,
     bluetoothCheckedAt: 0,
     passwordNeed: null,
+    passwordEpisodeId: null,
     passwordNotifiedAt: 0,
-  });
+  };
+}
 
+async function readNotificationState() {
   try {
-    const cluster = await runAgent("cluster");
-    const now = Date.now();
-    const previousJobs = state.jobs || {};
-    const currentJobs = cluster.reachable ? indexOwnJobs(cluster) : previousJobs;
-
-    if (state.initialized) {
-      for (const job of Object.values(currentJobs)) {
-        const previous = previousJobs[job.id];
-        if (job.state === "RUNNING" && previous?.state !== "RUNNING") {
-          await publishNotification(
-            "job.running",
-            "Cluster job started",
-            `${jobLabel(job)} is now running.`,
-            { tags: "rocket", priority: "default" },
-          );
-        }
-      }
-
-      for (const previous of Object.values(previousJobs)) {
-        if (previous.state !== "RUNNING") continue;
-        const current = currentJobs[previous.id];
-        if (!current) {
-          await publishNotification(
-            "job.finished",
-            "Cluster job finished",
-            `${jobLabel(previous)} is no longer in the Slurm queue.`,
-            { tags: "white_check_mark", priority: "default" },
-          );
-        } else if (current.state !== "RUNNING") {
-          await publishNotification(
-            "job.stopped_running",
-            "Cluster job stopped running",
-            `${jobLabel(current)} changed from RUNNING to ${current.state}.`,
-            { tags: "warning", priority: "default" },
-          );
-        }
-      }
+    const state = JSON.parse(await readFile(notificationStatePath, "utf8"));
+    if (!state || typeof state !== "object" || Array.isArray(state)) {
+      throw new Error("notification state is not a JSON object");
     }
+    return state;
+  } catch (error) {
+    if (error.code === "ENOENT") return newNotificationState();
+    await logEvent("notify.state_error", { error: safeText(error.message) });
+    throw error;
+  }
+}
 
-    const passwordNeed = passwordNeedForCluster(cluster);
-    const shouldRemind = passwordNeed
-      && (state.passwordNeed !== passwordNeed || now - (state.passwordNotifiedAt || 0) > config.reminderMs);
-    if (shouldRemind) {
-      await publishNotification(
-        `${passwordNeed}.password_needed`,
-        passwordNeed === "vpn" ? "Hearth VPN needs password" : "Hearth cluster needs password",
-        passwordNeed === "vpn"
-          ? "Tap to open Hearth and enter the university VPN password."
-          : "Tap to open Hearth and refresh the cluster login.",
-        { tags: "key", priority: "high", click: config.dashboardUrl },
-      );
-      state.passwordNotifiedAt = now;
-    }
+async function persistNotificationState(state) {
+  await writeJsonFile(notificationStatePath, state);
+}
 
-    await updateNetworkNotifications(config, state, now);
+async function updateClusterNotifications(config, state, cluster, now) {
+  const previousJobs = state.jobs || {};
+  const currentJobs = cluster.reachable ? indexOwnJobs(cluster) : previousJobs;
+  const currentTerminalJobs = indexOwnTerminalJobs(cluster);
+  const hasCurrentJobBaseline = state.jobNotificationVersion === 3;
+
+  if (!state.initialized || !hasCurrentJobBaseline) {
     state.initialized = true;
     state.jobs = currentJobs;
+    state.knownTerminalJobs = Object.fromEntries(
+      Object.keys(currentTerminalJobs).map((key) => [key, now]),
+    );
+    state.jobNotificationVersion = 3;
+    await persistNotificationState(state);
+  } else {
+    for (const job of jobStartCandidates(currentJobs, previousJobs)) {
+      await publishNotification(
+        "job.running",
+        "Cluster job started",
+        `${jobLabel(job)} is now running.`,
+        {
+          tags: "rocket",
+          priority: "default",
+          sequenceId: notificationSequenceId("job.running", `${job.id}:${job.submittedAt || "unknown"}`),
+        },
+      );
+      state.jobs = { ...(state.jobs || {}), [job.id]: job };
+      await persistNotificationState(state);
+    }
+    const knownTerminalJobs = state.knownTerminalJobs || {};
+    for (const { key, job } of jobTerminalCandidates(currentTerminalJobs, knownTerminalJobs)) {
+      const notification = terminalNotification(job);
+      await publishNotification(
+        notification.kind,
+        notification.title,
+        notification.message,
+        {
+          tags: notification.tags,
+          priority: notification.priority,
+          sequenceId: notificationSequenceId(notification.kind, key),
+        },
+      );
+      knownTerminalJobs[key] = now;
+      state.knownTerminalJobs = knownTerminalJobs;
+      await persistNotificationState(state);
+    }
+  }
+
+  state.jobs = currentJobs;
+  state.knownTerminalJobs = pruneKnownTerminalJobs(state.knownTerminalJobs || {}, now);
+
+  const passwordNeed = passwordNeedForCluster(cluster);
+  const passwordNeedChanged = state.passwordNeed !== passwordNeed;
+  if (passwordNeedChanged || (passwordNeed && !state.passwordEpisodeId)) {
     state.passwordNeed = passwordNeed;
-    await writeJsonFile(notificationStatePath, state);
+    state.passwordEpisodeId = passwordNeed ? `${passwordNeed}:${now}` : null;
+    if (!passwordNeed) state.passwordNotifiedAt = 0;
+    await persistNotificationState(state);
+  }
+
+  const shouldRemind = passwordNeed
+    && (passwordNeedChanged || now - (state.passwordNotifiedAt || 0) >= config.reminderMs);
+  if (shouldRemind) {
+    await publishNotification(
+      `${passwordNeed}.password_needed`,
+      passwordNeed === "vpn" ? "Hearth VPN needs password" : "Hearth cluster needs password",
+      passwordNeed === "vpn"
+        ? "Tap to open Hearth and enter the university VPN password."
+        : "Tap to open Hearth and refresh the cluster login.",
+      {
+        tags: "key",
+        priority: "high",
+        click: config.dashboardUrl,
+        sequenceId: notificationSequenceId(`${passwordNeed}.password_needed`, state.passwordEpisodeId),
+      },
+    );
+    state.passwordNotifiedAt = now;
+  }
+
+  state.passwordNeed = passwordNeed;
+  await persistNotificationState(state);
+}
+
+async function runNotificationMonitorPass() {
+  const config = await notificationConfig();
+  if (!config.enabled) return;
+
+  try {
+    const state = await readNotificationState();
+    const cluster = await runAgent("cluster");
+    const now = Date.now();
+    await updateClusterNotifications(config, state, cluster, now);
+
+    try {
+      await updateNetworkNotifications(config, state, now);
+      await persistNotificationState(state);
+    } catch (error) {
+      await logEvent("notify.network_monitor_error", { error: safeText(error.message) });
+    }
   } catch (error) {
     await logEvent("notify.monitor_error", { error: safeText(error.message) });
   }
+}
+
+const runNotificationMonitor = createExclusiveRunner(
+  runNotificationMonitorPass,
+  () => logEvent("notify.monitor_overlap_skipped"),
+);
+
+async function notificationMonitorLoop() {
+  await runNotificationMonitor();
+  const config = await notificationConfig();
+  setTimeout(() => void notificationMonitorLoop(), config.pollMs);
 }
 
 async function startNotificationMonitor() {
@@ -1044,8 +1110,7 @@ async function startNotificationMonitor() {
     topic: config.topic,
     pollMs: config.pollMs,
   });
-  runNotificationMonitor();
-  setInterval(runNotificationMonitor, config.pollMs);
+  void notificationMonitorLoop();
 }
 
 async function serveStatic(request, response) {

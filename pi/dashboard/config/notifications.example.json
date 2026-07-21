@@ -13,5 +13,7 @@
   "networkUnknownRetentionMs": 604800000,
   "bluetoothPollMs": 300000,
   "bluetoothScanSeconds": 8,
-  "reminderMs": 1800000
+  "reminderMs": 1800000,
+  "deliveryTimeoutMs": 10000,
+  "cache": true
 }

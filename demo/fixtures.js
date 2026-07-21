@@ -73,6 +73,7 @@ export function demoCluster() {
     configured: true,
     reachable: true,
     scheduler: "slurm",
+    user: "demo01",
     sshHost: "compute-demo",
     host: "login.demo.invalid",
     timestamp: nowSeconds(),
@@ -100,6 +101,8 @@ export function demoCluster() {
         estimatedStart: "2026-07-20T18:40:00", friend: false,
       },
     ],
+    accountingAvailable: true,
+    terminalJobs: [],
     userSummaries: [
       {
         id: "demo01", name: "Ada Mensah", jobCount: 1, running: 1, pending: 0,

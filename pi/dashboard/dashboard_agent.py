@@ -506,8 +506,30 @@ def load_cluster_config():
     }
 
 
+TERMINAL_JOB_STATES = {
+    "BOOT_FAIL",
+    "CANCELLED",
+    "COMPLETED",
+    "DEADLINE",
+    "FAILED",
+    "NODE_FAIL",
+    "OUT_OF_MEMORY",
+    "PREEMPTED",
+    "REVOKED",
+    "TIMEOUT",
+}
+
+
 def parse_cluster_sections(output):
-    sections = {"host": [], "partitions": [], "jobs": [], "starts": [], "passwd": [], "nodes": []}
+    sections = {
+        "host": [],
+        "partitions": [],
+        "jobs": [],
+        "starts": [],
+        "passwd": [],
+        "accounting": [],
+        "nodes": [],
+    }
     current = None
     for line in output.splitlines():
         if line == "__HOST__":
@@ -524,6 +546,9 @@ def parse_cluster_sections(output):
             continue
         if line == "__PASSWD__":
             current = "passwd"
+            continue
+        if line == "__SACCT__":
+            current = "accounting"
             continue
         if line == "__NODES__":
             current = "nodes"
@@ -647,6 +672,32 @@ def parse_jobs(lines, names, estimates=None):
             "estimatedStart": estimate.get("estimatedStart"),
         })
     return jobs
+
+
+def parse_accounting(lines):
+    available = bool(lines and lines[0] == "__AVAILABLE__")
+    if not available:
+        return False, []
+
+    jobs = []
+    for line in lines[1:]:
+        parts = line.split("|", 7)
+        if len(parts) != 8:
+            continue
+        state = parts[2].split()[0].split("+")[0].upper()
+        if state not in TERMINAL_JOB_STATES:
+            continue
+        jobs.append({
+            "id": parts[0],
+            "user": parts[1],
+            "state": state,
+            "time": parts[3],
+            "submittedAt": None if parts[4] in {"", "Unknown", "N/A"} else parts[4],
+            "startedAt": None if parts[5] in {"", "Unknown", "N/A"} else parts[5],
+            "endedAt": None if parts[6] in {"", "Unknown", "N/A"} else parts[6],
+            "name": parts[7],
+        })
+    return True, jobs
 
 
 def sort_jobs(jobs):
@@ -869,6 +920,7 @@ def cluster_status():
         }
     ssh_host = config["sshHost"]
     jump_host = config["jumpHost"]
+    accounting_user = shlex.quote(config["user"])
     remote_script = "; ".join([
         "printf '%s\\n' __HOST__",
         "hostname",
@@ -880,6 +932,8 @@ def cluster_status():
         "command -v squeue >/dev/null 2>&1 && squeue --start -h -t PENDING -o '%i|%Q|%S'",
         "printf '%s\\n' __PASSWD__",
         "users=$(command -v squeue >/dev/null 2>&1 && squeue -h -o '%u' | sort -u | tr '\\n' ' '); [ -n \"$users\" ] && getent passwd $users || true",
+        "printf '%s\\n' __SACCT__",
+        f"if command -v sacct >/dev/null 2>&1 && accounting_output=$(sacct -X -n -P -S now-2days -u {accounting_user} -o JobIDRaw,User,State,Elapsed,Submit,Start,End,JobName 2>/dev/null); then printf '%s\\n' __AVAILABLE__; printf '%s\\n' \"$accounting_output\"; else printf '%s\\n' __UNAVAILABLE__; fi",
         "printf '%s\\n' __NODES__",
         "command -v scontrol >/dev/null 2>&1 && scontrol show nodes -o | head -100",
     ])
@@ -927,6 +981,7 @@ def cluster_status():
         cached_users.update(discovered_users)
         save_user_cache(cached_users)
     jobs = sort_jobs(parse_jobs(sections["jobs"], cached_users, parse_start_estimates(sections["starts"])))
+    accounting_available, terminal_jobs = parse_accounting(sections["accounting"])
     for job in jobs:
         job["friend"] = job["user"] in config["friends"]
     nodes = parse_nodes(sections["nodes"], jobs)
@@ -935,10 +990,14 @@ def cluster_status():
         "reachable": True,
         "scheduler": config["scheduler"],
         "sshHost": ssh_host,
+        "jumpHost": config["jumpHost"],
+        "user": config["user"],
         "host": sections["host"][0] if sections["host"] else ssh_host,
         "timestamp": int(time.time()),
         "partitions": partitions,
         "jobs": jobs,
+        "accountingAvailable": accounting_available,
+        "terminalJobs": terminal_jobs,
         "userSummaries": summarize_users(jobs, cached_users, config["friends"]),
         "nodes": nodes,
         "states": counts_by(jobs, "state"),

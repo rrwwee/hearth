@@ -64,6 +64,7 @@ The Node server and Pi agent are intentionally separate. The web process handles
 3. **Credentials are handled ephemerally.** Password actions require a protected same-origin request, are accepted only by the Pi-hosted process, and are sent directly to short-lived helpers over standard input. They are neither placed in arguments nor persisted by Hearth.
 4. **Remote access repairs itself.** A split-route VPN preserves the overlay-network path while systemd timers renew eligible Kerberos tickets and rebuild stale OpenSSH control connections.
 5. **The interface distinguishes allocation from utilisation.** Slurm CPU and memory requests are labelled as allocations, multi-GPU jobs remain one row, unallocated GPUs are not presented as schedulable, and power shows current versus IPMI average without inventing a capacity ceiling.
+6. **Job notifications use scheduler accounting.** Hearth uses `squeue` to detect when your jobs start and recent `sacct` allocation records to distinguish successful completion, cancellation and failure states. Notification retries reuse a stable ntfy sequence so a transient delivery problem updates the same alert instead of stacking duplicates.
 
 ## Configure a real deployment
 
