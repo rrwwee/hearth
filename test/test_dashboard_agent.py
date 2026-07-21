@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 import sys
 import tempfile
@@ -16,6 +17,20 @@ SPEC.loader.exec_module(dashboard_agent)
 
 
 class AccountingParserTests(unittest.TestCase):
+    def test_friend_colors_are_loaded_from_private_cluster_config(self):
+        config_path = dashboard_agent.CONFIG_DIR / "cluster.json"
+        config_path.write_text(json.dumps({
+            "sshHost": "compute",
+            "jumpHost": "cluster-jump",
+            "user": "researcher",
+            "friends": ["researcher", "collaborator"],
+            "friendColors": {"researcher": "red", "collaborator": "blue"},
+        }), encoding="utf-8")
+
+        config = dashboard_agent.load_cluster_config()
+
+        self.assertEqual(config["friendColors"], {"researcher": "red", "collaborator": "blue"})
+
     def test_unavailable_accounting_is_explicit(self):
         self.assertEqual(dashboard_agent.parse_accounting(["__UNAVAILABLE__"]), (False, []))
 

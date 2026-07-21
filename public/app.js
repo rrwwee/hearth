@@ -405,8 +405,11 @@ function gpuRequestCount(job) {
   return 1;
 }
 
-function friendClass(user, isFriend) {
+const friendColors = new Set(["red", "blue", "green", "yellow", "pink", "brown"]);
+
+function friendClass(user, isFriend, configuredColor) {
   if (!isFriend) return "";
+  if (friendColors.has(configuredColor)) return `friend-color-${configuredColor}`;
   const hash = [...String(user || "friend")].reduce(
     (value, character) => ((value * 31) + character.codePointAt(0)) >>> 0,
     0,
@@ -430,7 +433,7 @@ function renderJob(job) {
 function renderUser(user, maxJobs, open = false) {
   const details = document.createElement("details");
   const displayName = user.name || user.id;
-  const friendClassName = friendClass(user.id, user.friend);
+  const friendClassName = friendClass(user.id, user.friend, user.friendColor);
   details.className = `cluster-user${user.friend || friendClassName ? ` is-friend ${friendClassName}` : ""}`;
   details.dataset.key = user.id;
   details.open = open;
@@ -478,7 +481,7 @@ function queueOrder(a, b) {
 function renderQueueJob(job) {
   const item = document.createElement("li");
   const displayName = job.userName || job.user;
-  const friendClassName = friendClass(job.user, job.friend);
+  const friendClassName = friendClass(job.user, job.friend, job.friendColor);
   item.className = `queue-job is-${job.state.toLowerCase()}${job.friend || friendClassName ? ` is-friend ${friendClassName}` : ""}`;
   const timing = job.state === "RUNNING"
     ? job.time
@@ -550,7 +553,7 @@ function renderNode(node) {
     const busyItems = runningJobs.map((job) => {
       const li = document.createElement("li");
       const gpuCount = Math.max(1, gpuRequestCount(job));
-      const friendClassName = friendClass(job.user, job.friend);
+      const friendClassName = friendClass(job.user, job.friend, job.friendColor);
       if (job.friend || friendClassName) li.classList.add("is-friend", friendClassName);
       li.innerHTML = `
         <span>${gpuCount > 1 ? `${gpuCount}× ` : ""}${gpuLabel(node.gpu)}</span>

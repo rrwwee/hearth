@@ -85,7 +85,7 @@ export function demoCluster() {
         id: "42017", user: "demo01", userName: "Ada Mensah", state: "RUNNING",
         time: "1-04:18:12", durationSeconds: 101_892, submittedAt: "2026-07-18T08:20:00",
         nodeCount: 1, nodeList: ["forge01"], reason: "forge01", cpus: 16,
-        gres: "gres/gpu:h200:2", name: "latent-dynamics", friend: true,
+        gres: "gres/gpu:h200:2", name: "latent-dynamics", friend: true, friendColor: "blue",
       },
       {
         id: "42031", user: "demo02", userName: "Jun Park", state: "RUNNING",
@@ -106,7 +106,7 @@ export function demoCluster() {
     userSummaries: [
       {
         id: "demo01", name: "Ada Mensah", jobCount: 1, running: 1, pending: 0,
-        longestRunningSeconds: 101_892, firstQueuedAt: null, friend: true,
+        longestRunningSeconds: 101_892, firstQueuedAt: null, friend: true, friendColor: "blue",
         jobs: [{ id: "42017", name: "latent-dynamics", state: "RUNNING", time: "1-04:18:12", durationSeconds: 101_892, nodeList: ["forge01"], cpus: 16, gres: "gres/gpu:h200:2" }],
       },
       {
@@ -127,7 +127,7 @@ export function demoCluster() {
         memory: { allocatedMb: 393_216, totalMb: 2_060_000, freeMb: 1_451_000, percent: 19.1 },
         gpu: { type: "h200", allocated: 5, total: 8, free: 3 },
         watts: 2_180, averageWatts: 1_640, jobCount: 1,
-        jobs: [{ id: "42017", name: "latent-dynamics", user: "demo01", userName: "Ada Mensah", friend: true, time: "1-04:18:12", durationSeconds: 101_892, cpus: 16, gres: "gres/gpu:h200:2" }],
+        jobs: [{ id: "42017", name: "latent-dynamics", user: "demo01", userName: "Ada Mensah", friend: true, friendColor: "blue", time: "1-04:18:12", durationSeconds: 101_892, cpus: 16, gres: "gres/gpu:h200:2" }],
       },
       {
         name: "kiln01", state: "mixed", partitions: ["research"],

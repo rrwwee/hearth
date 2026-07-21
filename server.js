@@ -411,6 +411,12 @@ async function validateLiveConfiguration() {
       || !Array.isArray(cluster.friends) || !Number.isFinite(Number(cluster.jobLimit))) {
     throw new Error("Cluster configuration has an invalid scheduler, SSH host, jump host, user, friends list, or job limit.");
   }
+  const friendColors = cluster.friendColors || {};
+  const allowedFriendColors = new Set(["red", "blue", "green", "yellow", "pink", "brown"]);
+  if (typeof friendColors !== "object" || Array.isArray(friendColors)
+      || Object.values(friendColors).some((color) => !allowedFriendColors.has(color))) {
+    throw new Error("Cluster friendColors must map account IDs to red, blue, green, yellow, pink, or brown.");
+  }
 
   let ntfy;
   try {

@@ -496,6 +496,13 @@ def load_cluster_config():
     ssh_host = str(config.get("sshHost") or os.environ.get("HEARTH_CLUSTER_HOST") or "").strip()
     jump_host = str(config.get("jumpHost") or os.environ.get("HEARTH_CLUSTER_JUMP") or "").strip()
     user = str(config.get("user") or os.environ.get("HEARTH_CLUSTER_USER") or "").strip()
+    valid_friend_colors = {"red", "blue", "green", "yellow", "pink", "brown"}
+    raw_friend_colors = config.get("friendColors", {})
+    if not isinstance(raw_friend_colors, dict) or any(
+        not isinstance(color, str) or color not in valid_friend_colors
+        for color in raw_friend_colors.values()
+    ):
+        raise RuntimeError("Cluster friendColors must map account IDs to red, blue, green, yellow, pink, or brown.")
     return {
         "configured": bool(ssh_host and jump_host and user),
         "scheduler": config.get("scheduler", "slurm"),
@@ -503,6 +510,7 @@ def load_cluster_config():
         "jumpHost": jump_host,
         "user": user,
         "friends": {str(friend) for friend in config.get("friends", [])},
+        "friendColors": {str(friend): color for friend, color in raw_friend_colors.items()},
     }
 
 
@@ -794,6 +802,7 @@ def decorate_nodes(nodes, jobs):
                     "user": job["user"],
                     "userName": job.get("userName"),
                     "friend": job.get("friend", False),
+                    "friendColor": job.get("friendColor"),
                     "time": job["time"],
                     "durationSeconds": job.get("durationSeconds", 0),
                     "cpus": job.get("cpus"),
@@ -869,6 +878,7 @@ def summarize_users(jobs, names, friend_ids):
                 "longestRunningSeconds": 0,
                 "firstQueuedAt": None,
                 "friend": user in friend_ids,
+                "friendColor": job.get("friendColor"),
                 "jobs": [],
             }
         grouped[user]["jobCount"] += 1
@@ -984,6 +994,7 @@ def cluster_status():
     accounting_available, terminal_jobs = parse_accounting(sections["accounting"])
     for job in jobs:
         job["friend"] = job["user"] in config["friends"]
+        job["friendColor"] = config["friendColors"].get(job["user"])
     nodes = parse_nodes(sections["nodes"], jobs)
     return {
         "configured": True,
