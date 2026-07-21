@@ -8,7 +8,7 @@
     "demo": "node server.js",
     "start:live": "node --env-file=.env server.js",
     "validate:live": "HEARTH_VALIDATE_ONLY=1 node server.js",
-    "test": "node --test",
+    "test": "node --test && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s test -p 'test_*.py'",
     "audit:public": "node scripts/audit-public-tree.mjs",
     "audit:history": "node scripts/audit-git-history.mjs",
     "check:syntax": "node --check server.js && node --check public/app.js && node --check demo/fixtures.js && python3 -c \"import ast, pathlib; ast.parse(pathlib.Path('pi/dashboard/dashboard_agent.py').read_text())\" && bash -n pi/dashboard/*.sh pi/dashboard/lib/*.sh",

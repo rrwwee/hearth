@@ -96,7 +96,14 @@ test("validation-only live mode reads configuration without running adapters or 
   await chmod(agentPath, 0o755);
   await writeFile(join(configDir, "devices.json"), JSON.stringify({ devices: { "192.0.2.10": "fixture host" } }), "utf8");
   await writeFile(join(configDir, "notifications.json"), JSON.stringify({ enabled: false }), "utf8");
-  await writeFile(join(configDir, "cluster.json"), JSON.stringify({ scheduler: "slurm", sshHost: "compute", friends: [], jobLimit: 100 }), "utf8");
+  await writeFile(join(configDir, "cluster.json"), JSON.stringify({
+    scheduler: "slurm",
+    sshHost: "compute",
+    jumpHost: "cluster-jump",
+    user: "researcher",
+    friends: [],
+    jobLimit: 100,
+  }), "utf8");
   await writeFile(join(configDir, "ntfy-server.yml"), "base-url: https://notify.example.invalid\nlisten-http: :2586\ncache-duration: 72h\n", "utf8");
 
   const child = spawn(process.execPath, ["server.js"], {

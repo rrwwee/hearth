@@ -4,5 +4,10 @@
   "jumpHost": "cluster-jump",
   "user": "researcher",
   "friends": ["collaborator-a", "collaborator-b"],
+  "friendColors": {
+    "researcher": "red",
+    "collaborator-a": "blue",
+    "collaborator-b": "green"
+  },
   "jobLimit": 1000
 }

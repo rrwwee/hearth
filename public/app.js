@@ -285,16 +285,33 @@ function tickNetworkDurations() {
 }
 
 function authModeForCluster(cluster) {
-  if (!cluster || cluster.reachable) return null;
+  if (!cluster || cluster.reachable || cluster.configured === false) return null;
+  const checks = Array.isArray(cluster.health?.checks) ? cluster.health.checks : [];
+  if (checks.length) {
+    const vpn = checks.find((check) => check.key === "vpn");
+    if (vpn && !vpn.ok && vpn.state === "needs password") return "vpn";
+    const ticket = checks.find((check) => check.key === "ticket");
+    if (ticket && !ticket.ok && ticket.state === "needs password") return "cluster";
+    return null;
+  }
   const note = `${cluster.note || ""}`.toLowerCase();
   if (
     note.includes("network is unreachable") ||
     note.includes("no route to host") ||
-    note.includes("connection timed out")
+    note.includes("connection timed out") ||
+    note.includes("vpn tunnel started")
   ) {
     return "vpn";
   }
-  return "cluster";
+  if (
+    note.includes("permission denied") ||
+    note.includes("kerberos") ||
+    note.includes("ticket") ||
+    note.includes("refresh the configured jump connection")
+  ) {
+    return "cluster";
+  }
+  return null;
 }
 
 function setAuthPrompt(mode, status = null) {
@@ -388,8 +405,11 @@ function gpuRequestCount(job) {
   return 1;
 }
 
-function friendClass(user, isFriend) {
+const friendColors = new Set(["red", "blue", "green", "yellow", "pink", "brown"]);
+
+function friendClass(user, isFriend, configuredColor) {
   if (!isFriend) return "";
+  if (friendColors.has(configuredColor)) return `friend-color-${configuredColor}`;
   const hash = [...String(user || "friend")].reduce(
     (value, character) => ((value * 31) + character.codePointAt(0)) >>> 0,
     0,
@@ -413,7 +433,7 @@ function renderJob(job) {
 function renderUser(user, maxJobs, open = false) {
   const details = document.createElement("details");
   const displayName = user.name || user.id;
-  const friendClassName = friendClass(user.id, user.friend);
+  const friendClassName = friendClass(user.id, user.friend, user.friendColor);
   details.className = `cluster-user${user.friend || friendClassName ? ` is-friend ${friendClassName}` : ""}`;
   details.dataset.key = user.id;
   details.open = open;
@@ -461,7 +481,7 @@ function queueOrder(a, b) {
 function renderQueueJob(job) {
   const item = document.createElement("li");
   const displayName = job.userName || job.user;
-  const friendClassName = friendClass(job.user, job.friend);
+  const friendClassName = friendClass(job.user, job.friend, job.friendColor);
   item.className = `queue-job is-${job.state.toLowerCase()}${job.friend || friendClassName ? ` is-friend ${friendClassName}` : ""}`;
   const timing = job.state === "RUNNING"
     ? job.time
@@ -533,7 +553,7 @@ function renderNode(node) {
     const busyItems = runningJobs.map((job) => {
       const li = document.createElement("li");
       const gpuCount = Math.max(1, gpuRequestCount(job));
-      const friendClassName = friendClass(job.user, job.friend);
+      const friendClassName = friendClass(job.user, job.friend, job.friendColor);
       if (job.friend || friendClassName) li.classList.add("is-friend", friendClassName);
       li.innerHTML = `
         <span>${gpuCount > 1 ? `${gpuCount}× ` : ""}${gpuLabel(node.gpu)}</span>

@@ -509,11 +509,17 @@ textarea {
   background: rgba(245, 232, 200, 0.045);
 }
 
+.friend-color-red,
 .friend-color-0 { --friend-color: #ff7d6b; }
+.friend-color-blue,
 .friend-color-1 { --friend-color: #78b8ff; }
+.friend-color-green,
 .friend-color-2 { --friend-color: #8fd680; }
+.friend-color-yellow,
 .friend-color-3 { --friend-color: #f4d35e; }
+.friend-color-pink,
 .friend-color-4 { --friend-color: #ff8fc7; }
+.friend-color-brown,
 .friend-color-5 { --friend-color: #b88a5a; }
 
 .cluster-user.is-friend summary > span:nth-child(2),
