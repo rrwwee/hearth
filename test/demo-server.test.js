@@ -51,6 +51,11 @@ test("demo server is fixture-only and rejects credential actions", async (contex
   context.after(() => child.kill("SIGTERM"));
   await waitForReady(child);
 
+  const healthResponse = await fetch(`http://127.0.0.1:${port}/api/health`);
+  const health = await healthResponse.json();
+  assert.equal(healthResponse.status, 200);
+  assert.deepEqual(health, { ok: true, mode: "demo", release: "development" });
+
   for (const endpoint of ["snapshot", "network", "bluetooth", "cluster"]) {
     const response = await fetch(`http://127.0.0.1:${port}/api/${endpoint}`);
     const payload = await response.json();

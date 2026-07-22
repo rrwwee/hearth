@@ -110,6 +110,35 @@ Validate live configuration without listening, running adapters, writing state o
 HEARTH_MODE=live npm run validate:live
 ```
 
+## Deploy to a Pi
+
+The live deployment can fetch an exact commit from this public repository while
+keeping identifying configuration, operational state and private media outside
+Git. The first deployment needs a copy of `pi/dashboard/deploy-from-git.sh` at
+`$HEARTH_BASE_DIR/deploy-from-git.sh`. Subsequent deployments update that stable
+launcher from the validated release.
+
+On the Pi, a deployment:
+
+1. fetches the requested revision into a non-live repository cache;
+2. extracts the exact commit into a versioned release directory;
+3. runs the test suite and validates the live configuration;
+4. atomically moves the `current` symlink and restarts the user service; and
+5. verifies `/api/health`, restoring the prior release if the check fails.
+
+Run a later deployment from another machine with:
+
+```sh
+HEARTH_DEPLOY_BASE=/home/pi/Code/dashboard \
+  scripts/deploy-to-pi.sh pi-dashboard origin/main
+```
+
+The Pi reports the running commit from `/api/health`. Releases live under
+`$HEARTH_BASE_DIR/releases`; configuration and state remain under
+`$HEARTH_BASE_DIR/config` and `$HEARTH_BASE_DIR/state`. A private background
+video may be stored at `$HEARTH_BASE_DIR/private/public/background.mp4` and is
+linked into each release without entering Git.
+
 The optional household video is intentionally not distributed. A private deployment may place a licensed `public/background.mp4`; the public demo uses the built-in CSS hearth treatment when it is absent.
 
 ## Security and privacy model

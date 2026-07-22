@@ -32,18 +32,32 @@ const commits = execFileSync("git", ["rev-list", "HEAD"], { cwd: root, encoding:
 for (const hash of commits) {
   const metadata = execFileSync(
     "git",
-    ["show", "-s", "--format=%an%n%ae%n%cn%n%ce%n%B", hash],
+    ["show", "-s", "--format=%P%x00%an%x00%ae%x00%cn%x00%ce%x00%B", hash],
     { cwd: root, encoding: "utf8" },
   );
-  const emails = metadata.match(/\b[^\s<>@]+@[^\s<>@]+\b/g) || [];
-  if (emails.some((email) => !email.toLowerCase().endsWith("@users.noreply.github.com"))) {
+  const [parents, authorName, authorEmail, committerName, committerEmail, ...bodyParts] = metadata.split("\0");
+  const body = bodyParts.join("\0");
+  const githubMerge = parents.trim().split(/\s+/).length > 1
+    && committerName === "GitHub"
+    && committerEmail.toLowerCase() === "noreply@github.com";
+  const emails = [
+    ...(githubMerge ? [] : [authorEmail]),
+    committerEmail,
+    ...(body.match(/\b[^\s<>@]+@[^\s<>@]+\b/g) || []),
+  ];
+  const safeEmail = (email) => {
+    const normalized = email.trim().toLowerCase();
+    return normalized.endsWith("@users.noreply.github.com") || normalized === "noreply@github.com";
+  };
+  if (emails.some((email) => !safeEmail(email))) {
     findings.set(`non-noreply commit email\0${hash}`, {
       category: "non-noreply Git author or committer email",
       path: `commit metadata (${hash.slice(0, 7)})`,
     });
   }
+  const publicMetadata = [authorName, committerName, body].join("\n");
   for (const [category, pattern] of patterns) {
-    if (pattern.test(metadata)) {
+    if (pattern.test(publicMetadata)) {
       findings.set(`${category}\0commit-${hash}`, { category, path: `commit metadata (${hash.slice(0, 7)})` });
     }
   }

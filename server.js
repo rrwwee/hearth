@@ -48,6 +48,7 @@ const clusterPrincipal = setting("HEARTH_CLUSTER_PRINCIPAL");
 const clusterJumpHost = setting("HEARTH_CLUSTER_JUMP");
 const clusterProbeHost = setting("HEARTH_CLUSTER_PROBE_HOST");
 const vpnHelperPath = setting("HEARTH_VPN_HELPER");
+const release = setting("HEARTH_RELEASE") || "development";
 const stateDir = demoMode ? join(__dirname, ".demo-state") : requiredSetting("HEARTH_STATE_DIR");
 const configDir = demoMode ? join(__dirname, "demo") : requiredSetting("HEARTH_CONFIG_DIR");
 const eventLogPath = join(stateDir, "hearth-events.jsonl");
@@ -1153,6 +1154,15 @@ const routes = new Map([
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
+  if (url.pathname === "/api/health" && request.method === "GET") {
+    response.writeHead(200, {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    });
+    response.end(JSON.stringify({ ok: true, mode: appMode, release }));
+    return;
+  }
+
   if (url.pathname === "/api/secret" && request.method === "POST") {
     try {
       const payload = await handleSecret(request);
