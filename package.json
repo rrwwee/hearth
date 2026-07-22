@@ -11,7 +11,7 @@
     "test": "node --test && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s test -p 'test_*.py'",
     "audit:public": "node scripts/audit-public-tree.mjs",
     "audit:history": "node scripts/audit-git-history.mjs",
-    "check:syntax": "node --check server.js && node --check public/app.js && node --check demo/fixtures.js && python3 -c \"import ast, pathlib; ast.parse(pathlib.Path('pi/dashboard/dashboard_agent.py').read_text())\" && bash -n pi/dashboard/*.sh pi/dashboard/lib/*.sh",
+    "check:syntax": "node --check server.js && node --check public/app.js && node --check demo/fixtures.js && python3 -c \"import ast, pathlib; ast.parse(pathlib.Path('pi/dashboard/dashboard_agent.py').read_text())\" && bash -n pi/dashboard/*.sh pi/dashboard/lib/*.sh scripts/*.sh",
     "check": "npm run check:syntax && npm test && npm run audit:public",
     "check:release": "npm run check && npm run audit:history"
   },
